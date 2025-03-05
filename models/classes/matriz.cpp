@@ -1,5 +1,6 @@
 #include "../headers/matriz.h"
 #include "../headers/ponto.h"
+#include <cmath>
 
 matriz::matriz(tupla linha1, tupla linha2, tupla linha3) : linha1(linha1), linha2(linha2), linha3(linha3){
     this->linha4 = tupla();
@@ -88,12 +89,18 @@ matriz matriz::worldToCamera(ponto eye, ponto at, ponto up){
     return matriz(camera1, camera2, camera3);
 }
 
-matriz matriz::cameraToWorld(ponto eye, ponto at, ponto up){
+matriz matriz::cameraToWorld(ponto eye, ponto at, ponto up) {
+    // 1. Eixo Z da câmera (direção da câmera, apontando para trás)
     tupla camera3 = tupla::sub(eye, at, true);
+
+    // 2. Eixo X da câmera (direção direita, perpendicular ao up e à direção da câmera)
     tupla vup = tupla::sub(up, eye, false);
     tupla camera1 = vup.cross(camera3, true);
+
+    // 3. Eixo Y da câmera (direção "para cima", perpendicular aos dois anteriores)
     tupla camera2 = camera3.cross(camera1, false);
 
+    // 4. Posição da câmera
     array<float, 3> cordEye = eye.getCoord();
 
     return matriz(

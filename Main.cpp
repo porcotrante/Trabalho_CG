@@ -16,12 +16,17 @@
 #include "./models/headers/triangulo.h"
 #include "./models/headers/malha.h"
 #include "./models/headers/matriz.h"
+#include "./src/include/SDL2/SDL_events.h"
+#include "./src/include/SDL2/SDL_keycode.h"
 using namespace std;
 
 const int NCOL = 500, NLINHA = 500;
-const float DIST = 10.0f, WJANELA = 60.0f, HJANELA = 60.0f, DX = WJANELA/NCOL, DY = HJANELA/NLINHA, RAIO = 40.0f, M_ESFERA = 10.0f, M_PLANO = 1.0f, P0Z = -30.0f;
+const float DIST = 30.0f, WJANELA = 60.0f, HJANELA = 60.0f, DX = WJANELA/NCOL, DY = HJANELA/NLINHA, RAIO = 40.0f, M_ESFERA = 10.0f, M_PLANO = 1.0f, P0Z = -30.0f;
 const tupla K_ESFERA(0.7f,0.2f,0.2f), K_ESFERA2(0.2f,0.2f,0.7f), I_FONTE(0.6f, 0.6f, 0.6f), K_D_PLANO1(0.2f, 0.7f, 0.2f), K_D_PLANO2(0.3f, 0.3f, 0.7f), K_E_PLANO(0.0f, 0.0f, 0.0f), I_AMBIENTE(0.1f, 0.1f, 0.1f);
-const ponto eye(10.0f, 10.0f, P0Z), at(10.0f, 10.0f, P0Z - DIST), up(10.0f, 11.0f, P0Z - DIST); //cordenadas que definem a câmera
+ponto eye(0.0f, 0.0f, P0Z), look_at(0.0f, 0.0f, -100.0f), ponto_up(0.0f, 1.0f, -100.0f); //cordenadas que definem a câmera
+tupla up(0.0f, 1.0f, 0.0f);
+
+const tupla X_AXIS(1.0f, 0.0f, 0.0f), Y_AXIS(0.0f, 1.0f, 0.0f), Z_AXIS(0.0f, 0.0f, 1.0f);
 
 int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -44,8 +49,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    matriz M = matriz::worldToCamera(eye, at, up);
-
     ponto P0(0.0f, 0.0f, P0Z);
 
     pontoLuminoso fonte(0.0f, 0.0f, P0Z, I_FONTE);
@@ -57,8 +60,8 @@ int main(int argc, char* argv[]) {
     
     vector<objeto*> objetos = {
         new esfera(ponto(0.0f, 0.0f, -100.0f), 20.0f, K_ESFERA, K_ESFERA, K_ESFERA, M_ESFERA),
-        new plano(ponto(0.0f, -20.0f, 0.0f), tupla(0.0f,1.0f,0.0f), K_D_PLANO1, K_E_PLANO, K_D_PLANO1, M_PLANO),
-        new plano(ponto(0.0f, 0.0f, -200.0f), tupla(0.0f,0.0f,1.0f), K_D_PLANO2, K_E_PLANO, K_D_PLANO2, M_PLANO)
+        new plano(ponto(0.0f, -20.0f, 0.0f), Y_AXIS, K_D_PLANO1, K_E_PLANO, K_D_PLANO1, M_PLANO),
+        new plano(ponto(0.0f, 0.0f, -200.0f), Z_AXIS, K_D_PLANO2, K_E_PLANO, K_D_PLANO2, M_PLANO)
     };
 
     vector<float> distancias(objetos.size());
@@ -67,21 +70,38 @@ int main(int argc, char* argv[]) {
     while (rodando) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT || (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)) {
-                rodando = false;
+            if (event.type == SDL_QUIT || (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)) { rodando = false; }
+            if (event.type == SDL_KEYDOWN) {
+                switch (event.key.keysym.sym) {
+                    case SDLK_d: eye.x += 1.0f; break;
+                    case SDLK_a: eye.x -= 1.0f; break;
+                    case SDLK_SPACE: eye.y += 1.0f; break;
+                    case SDLK_LSHIFT: eye.y -= 1.0f; break;
+                    case SDLK_w: eye.z -= 1.0f; break;
+                    case SDLK_s: eye.z += 1.0f; break;
+                }
             }
         }
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Define a cor de fundo como preto
+        SDL_RenderClear(renderer); // Limpa a tela
 
         for (int y = 0; y < NCOL; y++) {
             float Py = HJANELA / 2.0f - y * DY - DY / 2.0f;
             for (int x = 0; x < NLINHA; x++) {
                 float Px = -WJANELA / 2.0f + x * DX + DX / 2.0f;
 
-                tupla pScreen(Px, Py, P0Z - DIST); //cordenadas de mundo
-                tupla rayTupla = M.multTupla(pScreen); //projetando das cordenadas de mundo para cordendas de câmera
-                ponto rayPonto(rayTupla.element1, rayTupla.element2, rayTupla.element3);
+                tupla p_camera(Px, Py, P0Z - DIST);
+                matriz cameraTransform = matriz::cameraToWorld(eye, look_at, ponto_up);
+                p_camera = cameraTransform.multTupla(p_camera);
 
-                raio ray(P0, tupla::sub(ponto(Px, Py, P0Z - DIST), P0, true));
+                ponto p_mundo(
+                    p_camera.element1,
+                    p_camera.element2,
+                    p_camera.element3
+                );
+
+                raio ray(eye, tupla::sub(p_mundo, eye, true));
 
                 int index = -1;
                 float menorDistancia = FLT_MAX;
@@ -98,7 +118,7 @@ int main(int argc, char* argv[]) {
                 } else {
                     objeto* obj = objetos[index];
                     tupla aux = ray.getDist().multiplyByScalar(menorDistancia, false);
-                    ponto Pi(P0.getCoord().at(0) + aux.element1, P0.getCoord().at(1) + aux.element2, P0.getCoord().at(2) + aux.element3);
+                    ponto Pi(eye.getCoord().at(0) + aux.element1, eye.getCoord().at(1) + aux.element2, eye.getCoord().at(2) + aux.element3);
 
                     tupla normal;
                     if (auto* co = dynamic_cast<cone*>(obj)) {

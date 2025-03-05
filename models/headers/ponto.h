@@ -5,12 +5,11 @@
 
 class ponto
 {
-private:
+public:
     float x;
     float y;
     float z;
     float aux;
-public:
     ponto(float x, float y, float z);
 
     std::array<float, 3> getCoord() const;
